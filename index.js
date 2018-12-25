@@ -32,13 +32,22 @@ HttpMultiswitch.prototype = {
                 rejectUnauthorized: false,
             },
             function (error, response, body) {
+                if (error || response.statusCode != 200) {
+                    callback(error, response, body);
+                    return;
+                }
+
                 var resp = JSON.parse(body);
                 if (resp.success || recursive) {
                     callback(error, response, body);
-                }
-                else {
+                } else {
                     _this.httpRequest("/webapi/auth.cgi?api=SYNO.API.Auth&method=Login&version=3&account=" + _this.username + "&passwd=" + _this.password + "&session=SurveillanceStation&format=sid",
                         function (err, resp, bod) {
+                            if (error || response.statusCode != 200) {
+                                _this.log.error("Unable to login, network error: " + bod);
+                                return;
+                            }
+
                             var r = JSON.parse(bod);
                             if (r.success) {
                                 //OK logged in
@@ -46,25 +55,28 @@ HttpMultiswitch.prototype = {
                                 _this.log.info("Logged in.");
                                 //Retry the request
                                 _this.httpRequest(path, callback, true);
+                            } else {
+                                //Didn't work
+                                _this.log.error("Unable to login, server error: " + bod);
                             }
-                            else {
-                                //Didnt work
-                                _this.log.error("Unable to login " + bod);
-                            }
-                        });
+                    });
                 }
             });
     },
     getState: function (targetService, callback) {
         this.httpRequest("/webapi/entry.cgi?api=SYNO.SurveillanceStation.HomeMode&version=1&method=GetInfo", function (error, response, responseBody) {
-            if (error) {
+            if (error || response.statusCode != 200) {
                 this.log.error('getPowerState failed: ' + error.message);
                 this.log('response: ' + response + '\nbody: ' + responseBody);
 
                 callback(error);
             } else {
                 var resp = JSON.parse(responseBody);
-                callback(error, resp.data.on);
+                if (resp && resp.data && resp.data.on) {
+                    callback(error, resp.data.on);
+                } else {
+                    this.log.error("Unexpected response: " + responseBody);
+                }
             }
         }.bind(this));
     },
