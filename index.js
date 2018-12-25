@@ -72,8 +72,8 @@ HttpMultiswitch.prototype = {
                 callback(error);
             } else {
                 var resp = JSON.parse(responseBody);
-                if (resp && resp.data && resp.data.on) {
-                    callback(error, resp.data.on);
+                if (resp && resp.data) {
+                    callback(error, !resp.data.on);
                 } else {
                     this.log.error("Unexpected response: " + responseBody);
                 }
