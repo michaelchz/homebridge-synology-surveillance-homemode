@@ -19,10 +19,10 @@ function HttpMultiswitch(log, config) {
     this.username = config.username || '';
     this.password = config.password || '';
     this.sessionToken = "";
+    this.state = false;
 }
 
 HttpMultiswitch.prototype = {
-
 
     httpRequest: function (path, callback, recursive) {
         var _this = this;
@@ -32,13 +32,8 @@ HttpMultiswitch.prototype = {
                 rejectUnauthorized: false,
             },
             function (error, response, body) {
-                if (error || response.statusCode != 200) {
-                    callback(error, response, body);
-                    return;
-                }
-
-                var resp = JSON.parse(body);
-                if (resp.success || recursive) {
+                var resp = (!error) ? JSON.parse(body) : null;
+                if ((resp && resp.success) || recursive) {
                     callback(error, response, body);
                 } else {
                     _this.httpRequest("/webapi/auth.cgi?api=SYNO.API.Auth&method=Login&version=3&account=" + _this.username + "&passwd=" + _this.password + "&session=SurveillanceStation&format=sid",
@@ -59,25 +54,32 @@ HttpMultiswitch.prototype = {
                                 //Didn't work
                                 _this.log.error("Unable to login, server error: " + bod);
                             }
-                    });
+                    }, true);
                 }
-            });
+            }
+        );
     },
-    getState: function (targetService, callback) {
-        this.httpRequest("/webapi/entry.cgi?api=SYNO.SurveillanceStation.HomeMode&version=1&method=GetInfo", function (error, response, responseBody) {
-            if (error || response.statusCode != 200) {
-                this.log.error('getPowerState failed: ' + error.message);
-                this.log('response: ' + response + '\nbody: ' + responseBody);
 
-                callback(error);
+    getState: function (targetService, callback) {
+        callback(null, this.state);
+
+        this.httpRequest("/webapi/entry.cgi?api=SYNO.SurveillanceStation.HomeMode&version=1&method=GetInfo", function (error, response, responseBody) {
+            if (error) {
+                this.state = false;
+                if (!error.message.includes('EHOSTUNREACH')) {
+                    this.log.error('getPowerState failed: ' + error.message);
+                    this.log('response: ' + response + '\nbody: ' + responseBody);
+                }
             } else {
                 var resp = JSON.parse(responseBody);
                 if (resp && resp.data) {
-                    callback(error, !resp.data.on);
+                    this.state = !resp.data.on
                 } else {
                     this.log.error("Unexpected response: " + responseBody);
                 }
             }
+
+            targetService.getCharacteristic(Characteristic.On).updateValue(this.state);
         }.bind(this));
     },
 
@@ -122,4 +124,3 @@ HttpMultiswitch.prototype = {
         return this.services;
     }
 };
-
