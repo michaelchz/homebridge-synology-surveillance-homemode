@@ -32,13 +32,19 @@ HttpMultiswitch.prototype = {
                 rejectUnauthorized: false,
             },
             function (error, response, body) {
+                if (error && error.message.includes('EHOSTUNREACH')) {
+                    //Host unreachable, return without further action
+                    callback(error, response, body);
+                    return;
+                }
+
                 var resp = (!error) ? JSON.parse(body) : null;
                 if ((resp && resp.success) || recursive) {
                     callback(error, response, body);
                 } else {
                     _this.httpRequest("/webapi/auth.cgi?api=SYNO.API.Auth&method=Login&version=3&account=" + _this.username + "&passwd=" + _this.password + "&session=SurveillanceStation&format=sid",
                         function (err, resp, bod) {
-                            if (error || response.statusCode != 200) {
+                            if (err || resp.statusCode != 200) {
                                 _this.log.error("Unable to login, network error: " + bod);
                                 return;
                             }
